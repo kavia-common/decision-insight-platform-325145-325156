@@ -1,9 +1,10 @@
+import { redirect } from "next/navigation";
+
+/**
+ * Home simply redirects. This keeps the root clean for static export while still
+ * providing a sensible entrypoint.
+ */
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-white flex items-center justify-center">
-      <h1 className="text-black text-4xl font-light">
-        decision_replay_frontend is being generated
-      </h1>
-    </main>
-  );
+  // For now, default to dashboard; AuthGate will still protect app routes.
+  redirect("/app/dashboard");
 }
