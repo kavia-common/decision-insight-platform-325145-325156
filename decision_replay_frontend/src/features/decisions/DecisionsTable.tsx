@@ -1,18 +1,42 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import { api } from "@/lib/api/client";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 type Row = { id: string; title: string; createdAt: string; status: string };
 
 export function DecisionsTable() {
+  const router = useRouter();
+  const { token, loading: authLoading } = useAuth();
+
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    // Don't call protected endpoints until we know auth state.
+    if (authLoading) return;
+
+    // If we have no token, the AuthGate will redirect; avoid calling /decisions.
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
     api
       .listDecisions()
       .then((r) => {
@@ -24,17 +48,28 @@ export function DecisionsTable() {
             id: d.id,
             title: d.title,
             status: d.status,
-            createdAt: d.created_at ?? d.decision_date ?? new Date().toISOString(),
+            createdAt:
+              d.created_at ?? d.decision_date ?? new Date().toISOString(),
           }))
         );
+      })
+      .catch((e) => {
+        const message = e instanceof Error ? e.message : "Unable to load decisions.";
+        // Gracefully handle 401s even if routing/guarding changes in the future.
+        if (typeof message === "string" && message.includes("API error 401")) {
+          router.replace(`/login?next=${encodeURIComponent("/app/decisions")}`);
+          return;
+        }
+        if (mounted) setError(message);
       })
       .finally(() => {
         if (mounted) setLoading(false);
       });
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authLoading, token, router]);
 
   const columns = useMemo<ColumnDef<Row>[]>(
     () => [
@@ -72,10 +107,22 @@ export function DecisionsTable() {
     []
   );
 
-  const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() });
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
 
   if (loading) {
     return <div className="text-sm text-gray-600">Loading decisions…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        {error}
+      </div>
+    );
   }
 
   if (rows.length === 0) {
@@ -93,7 +140,10 @@ export function DecisionsTable() {
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>
               {hg.headers.map((h) => (
-                <th key={h.id} className="px-3 text-left text-xs font-semibold text-gray-600">
+                <th
+                  key={h.id}
+                  className="px-3 text-left text-xs font-semibold text-gray-600"
+                >
                   {flexRender(h.column.columnDef.header, h.getContext())}
                 </th>
               ))}
@@ -102,7 +152,10 @@ export function DecisionsTable() {
         </thead>
         <tbody>
           {table.getRowModel().rows.map((r) => (
-            <tr key={r.id} className="rounded-2xl border border-[var(--border)] bg-white">
+            <tr
+              key={r.id}
+              className="rounded-2xl border border-[var(--border)] bg-white"
+            >
               {r.getVisibleCells().map((c) => (
                 <td key={c.id} className="px-3 py-3 align-middle">
                   {flexRender(c.column.columnDef.cell, c.getContext())}
