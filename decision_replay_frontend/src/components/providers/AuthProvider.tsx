@@ -41,17 +41,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    setToken(existing);
-    // Backend /me not implemented yet; we keep a stub user for demo if token exists.
-    if (existing) {
-      setUser({ id: "me", email: "user@example.com", name: "You" });
-    }
-    setLoading(false);
+    const bootstrap = async () => {
+      const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+      setToken(existing);
+
+      if (existing) {
+        try {
+          const me = await api.me();
+          setUser({
+            id: me.id,
+            email: me.email,
+            name: me.displayName ?? me.username ?? undefined,
+          });
+        } catch {
+          // Token invalid or backend unreachable; clear token.
+          localStorage.removeItem(STORAGE_KEY);
+          setToken(null);
+          setUser(null);
+        }
+      }
+
+      setLoading(false);
+    };
+
+    bootstrap();
   }, []);
 
   async function signIn(input: SignInInput) {
-    // When backend is ready: call api.signIn and store returned token.
     const res = await api.signIn(input);
     localStorage.setItem(STORAGE_KEY, res.token);
     setToken(res.token);
@@ -66,6 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function signOut() {
+    // Best-effort revoke on backend (if a wrapper exists). API client will include Authorization automatically.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const maybeApi: any = api as any;
+    if (typeof maybeApi.logout === "function") {
+      maybeApi.logout().catch(() => {});
+    }
+
     localStorage.removeItem(STORAGE_KEY);
     setToken(null);
     setUser(null);
