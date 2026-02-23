@@ -19,7 +19,16 @@ export default function SimilarityPage() {
     setLoading(true);
     try {
       const data = await api.similaritySearch({ query, limit: 8 });
-      setResults(data.results);
+      setResults(
+        data.results.map((r) => ({
+          id: r.id,
+          title: r.title,
+          // Backend returns `similarity` (0..1). UI expects `score`.
+          score: r.similarity ?? 0,
+          // Show a short context blurb when available.
+          summary: r.context ?? undefined,
+        }))
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {

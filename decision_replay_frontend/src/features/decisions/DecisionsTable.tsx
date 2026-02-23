@@ -16,7 +16,17 @@ export function DecisionsTable() {
     api
       .listDecisions()
       .then((r) => {
-        if (mounted) setRows(r);
+        if (!mounted) return;
+
+        // Backend uses snake_case; map into the table row shape.
+        setRows(
+          r.map((d) => ({
+            id: d.id,
+            title: d.title,
+            status: d.status,
+            createdAt: d.created_at ?? d.decision_date ?? new Date().toISOString(),
+          }))
+        );
       })
       .finally(() => {
         if (mounted) setLoading(false);
